@@ -3,6 +3,7 @@
 A WebSocket proxy that integrates with Cloudflare Tunnels.
 
 # Architecture
+```
 mindmap
   root((mrmine))
     eClient
@@ -20,7 +21,7 @@ mindmap
       this project
     Internet
       upstream
-
+```
 ## Key Concepts
 
 - **WebSocket Proxy**: Listens on `127.0.0.1:8080`, accepts WebSocket connections
