@@ -3,8 +3,7 @@
 A WebSocket proxy that integrates with Cloudflare Tunnels.
 
 # Architecture
-```
-mindmap
+```mindmap
   root((mrmine))
     eClient
       phone
