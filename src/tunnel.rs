@@ -4,12 +4,6 @@ use std::process::{Command, Stdio};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Child;
 
-// Subprocess handling, output parsing, timeouts
-// @dev ""
-//
-//
-// |__- -__|
-
 pub struct TunnelManager {
     config: Config,
 }
@@ -122,4 +116,4 @@ impl TunnelManager {
         log::info!("Tunnel stopped");
         Ok(())
     }
-
+}
