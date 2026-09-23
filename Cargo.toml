@@ -1,9 +1,10 @@
 [package]
 name = "cf-cdn"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
+cf_tunnel_proxy = { path = "../cf_tunnel_proxy" }
 tokio = { version = "1.35", features = ["full"] }
 tokio-tungstenite = "0.21"
 futures = "0.3"
@@ -12,15 +13,14 @@ env_logger = "0.11"
 thiserror = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 toml = "0.8"
- 
+
 [dev-dependencies]
 tokio-test = "0.4"
- 
+
 [[bin]]
 name = "proxy"
 path = "src/bin/proxy.rs"
- 
+
 [[bin]]
 name = "tunnel-cli"
 path = "src/bin/tunnel_cli.rs"
- 
