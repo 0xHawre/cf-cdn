@@ -3,24 +3,25 @@
 A WebSocket proxy that integrates with Cloudflare Tunnels.
 
 # Architecture
-```mindmap
-  root((mrmine))
-    eClient
-      phone
-      laptop
-      HTTPS / WebSocket :443
-    Cloudflare Edge
-      TLS terminate
-      hostname → tunnel
-    Outbound tunnel
-      cloudflared
-    Your VPS / Laptop
-      localhost:8080
-    WebSocket Proxy
-      this project
-    Internet
-      upstream
-```
+Client VPN App (iOS/Android/Desktop)
+            │
+            │ HTTPS + WebSocket
+            │
+    Cloudflare Edge (Optional)
+            │
+            │ Encrypted Tunnel
+            │
+Your Server (this project)
+    ┌───────┴────────┐
+    │                │
+WebSocket Server   SOCKS5 Client
+  127.0.0.1:8888      │
+                      │ TCP/UDP
+                      v
+                 Internet Destination
+                 (Google, Netflix, etc)
+
+
 ## Key Concepts
 
 - **WebSocket Proxy**: Listens on `127.0.0.1:8080`, accepts WebSocket connections
