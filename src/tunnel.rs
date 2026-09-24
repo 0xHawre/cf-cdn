@@ -1,5 +1,5 @@
 use crate::config::Config;
-use crate::error::{ProxyError, Result};
+use crate::error::{CdnError, Result};
 use std::process::{Command, Stdio};
 use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::Child;
@@ -13,13 +13,17 @@ impl TunnelManager {
         Self { config }
     }
 
-    /// Start cloudflared tunnel and extract the public URL
+    /// Start cloudflared tunnel
     pub async fn start_tunnel(&self) -> Result<(Child, String)> {
+        if !self.config.tunnel.enabled {
+            return Err(CdnError::Tunnel("Tunnel disabled in config".to_string()));
+        }
+
         // Check if cloudflared is installed
         self.check_cloudflared_installed()?;
 
         let local_url = format!("http://127.0.0.1:{}", self.config.tunnel.local_port);
-        
+
         log::info!("Starting Cloudflare tunnel to {}", local_url);
 
         let mut child = tokio::process::Command::new("cloudflared")
@@ -29,13 +33,11 @@ impl TunnelManager {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .map_err(|e| ProxyError::Tunnel(
-                format!("Failed to spawn cloudflared: {}", e)
-            ))?;
+            .map_err(|e| CdnError::Tunnel(format!("Failed to spawn cloudflared: {}", e)))?;
 
         // Extract URL from cloudflared output
         let stdout = child.stdout.take()
-            .ok_or_else(|| ProxyError::Tunnel("Failed to capture stdout".to_string()))?;
+            .ok_or_else(|| CdnError::Tunnel("Failed to capture stdout".to_string()))?;
 
         let reader = BufReader::new(stdout);
         let mut lines = reader.lines();
@@ -51,13 +53,12 @@ impl TunnelManager {
         &self,
         lines: &mut tokio::io::Lines<BufReader<tokio::process::ChildStdout>>,
     ) -> Result<String> {
-        // Match URLs like: https://quiet-marble-otter.trycloudflare.com
         let timeout = std::time::Duration::from_secs(10);
         let start = std::time::Instant::now();
 
         while let Some(line) = lines.next_line().await? {
             log::debug!("cloudflared: {}", line);
-            
+
             if let Some(start_idx) = line.find("https://") {
                 if let Some(end_idx) = line[start_idx..].find(" ") {
                     let url = &line[start_idx..start_idx + end_idx];
@@ -65,24 +66,23 @@ impl TunnelManager {
                         return Ok(url.to_string());
                     }
                 } else if line[start_idx..].contains("trycloudflare.com") {
-                    // URL extends to end of line
                     return Ok(line[start_idx..].trim().to_string());
                 }
             }
 
             if start.elapsed() > timeout {
-                return Err(ProxyError::Tunnel(
-                    "Timeout waiting for cloudflared URL".to_string()
+                return Err(CdnError::Tunnel(
+                    "Timeout waiting for cloudflared URL".to_string(),
                 ));
             }
         }
 
-        Err(ProxyError::Tunnel(
-            "cloudflared did not produce a tunnel URL".to_string()
+        Err(CdnError::Tunnel(
+            "cloudflared did not produce a tunnel URL".to_string(),
         ))
     }
 
-    /// Check if cloudflared is installed and accessible
+    /// Check if cloudflared is installed
     pub fn check_cloudflared_installed(&self) -> Result<()> {
         match Command::new("cloudflared")
             .arg("--version")
@@ -94,18 +94,15 @@ impl TunnelManager {
                     log::info!("Using cloudflared: {}", version.trim());
                     Ok(())
                 } else {
-                    Err(ProxyError::Tunnel(
-                        "cloudflared --version returned non-zero exit code".to_string()
+                    Err(CdnError::Tunnel(
+                        "cloudflared --version returned non-zero exit code".to_string(),
                     ))
                 }
             }
-            Err(e) => Err(ProxyError::Tunnel(
-                format!(
-                    "cloudflared not found. Install it with: \
-                    sudo apt install cloudflared (or see docs). Error: {}",
-                    e
-                )
-            )),
+            Err(e) => Err(CdnError::Tunnel(format!(
+                "cloudflared not found. Install with: sudo apt install cloudflared. Error: {}",
+                e
+            ))),
         }
     }
 
