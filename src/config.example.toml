@@ -1,0 +1,36 @@
+# cf-cdn Configuration File
+# VLESS proxy with Cloudflare tunnel integration
+
+[server]
+# Bind address (0.0.0.0 for all interfaces, 127.0.0.1 for localhost only)
+bind = "0.0.0.0"
+
+# Listen port for VLESS/WebSocket
+port = 8888
+
+# WebSocket path for clients
+ws_path = "/vless"
+
+[vless]
+# VLESS user UUID (auto-generated if not specified)
+uuid = "12345678-1234-5678-1234-567812345678"
+
+# Encryption: "none" or "auto"
+encryption = "none"
+
+# Network: "tcp", "udp", or "tcp,udp"
+network = "tcp"
+
+[tunnel]
+# Enable Cloudflare Quick Tunnel
+enabled = false
+
+# Local port to tunnel (should match server.port)
+local_port = 8888
+
+# Tunnel URL (auto-filled when tunnel starts)
+tunnel_url = ""
+
+[logging]
+# Log level: trace, debug, info, warn, error
+level = "info"
