@@ -1,46 +1,112 @@
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-use crate::error::{ProxyError, Result};
+use uuid::Uuid;
+use crate::error::{CdnError, Result};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ProxyConfig {
-    /// Local WebSocket proxy bind address
-    pub proxy_bind: String,
+pub struct VlessConfig {
+    /// VLESS user UUID
+    pub uuid: String,
     
-    /// Local WebSocket proxy listen port
-    pub proxy_port: u16,
+    /// Encryption level (none, auto)
+    #[serde(default = "default_encryption")]
+    pub encryption: String,
     
-    /// WebSocket path (e.g., /ws)
+    /// Enable network (tcp, udp, both)
+    #[serde(default = "default_network")]
+    pub network: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ServerConfig {
+    /// Bind address for VLESS server
+    #[serde(default = "default_bind")]
+    pub bind: String,
+    
+    /// Server port
+    #[serde(default = "default_port")]
+    pub port: u16,
+    
+    /// WebSocket path
+    #[serde(default = "default_ws_path")]
     pub ws_path: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TunnelConfig {
-    /// Port to expose through tunnel (same as proxy_port)
+    /// Enable Cloudflare tunnel
+    #[serde(default)]
+    pub enabled: bool,
+    
+    /// Local port to tunnel
     pub local_port: u16,
     
-    /// Cloudflared tunnel URL (will be shown after tunnel starts)
+    /// Cloudflare tunnel URL (auto-filled)
     #[serde(default)]
     pub tunnel_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
-    pub proxy: ProxyConfig,
+    pub server: ServerConfig,
+    pub vless: VlessConfig,
     pub tunnel: TunnelConfig,
+    
+    #[serde(default)]
+    pub logging: LoggingConfig,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LoggingConfig {
+    #[serde(default = "default_log_level")]
+    pub level: String,
+}
+
+// Default values
+fn default_bind() -> String {
+    "0.0.0.0".to_string()
+}
+
+fn default_port() -> u16 {
+    8888
+}
+
+fn default_ws_path() -> String {
+    "/vless".to_string()
+}
+
+fn default_encryption() -> String {
+    "none".to_string()
+}
+
+fn default_network() -> String {
+    "tcp".to_string()
+}
+
+fn default_log_level() -> String {
+    "info".to_string()
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            proxy: ProxyConfig {
-                proxy_bind: "127.0.0.1".to_string(),
-                proxy_port: 8080,
-                ws_path: "/ws".to_string(),
+            server: ServerConfig {
+                bind: default_bind(),
+                port: default_port(),
+                ws_path: default_ws_path(),
+            },
+            vless: VlessConfig {
+                uuid: Uuid::new_v4().to_string(),
+                encryption: default_encryption(),
+                network: default_network(),
             },
             tunnel: TunnelConfig {
-                local_port: 8080,
+                enabled: false,
+                local_port: default_port(),
                 tunnel_url: None,
+            },
+            logging: LoggingConfig {
+                level: default_log_level(),
             },
         }
     }
@@ -52,31 +118,53 @@ impl Config {
         match std::fs::read_to_string(path.as_ref()) {
             Ok(content) => {
                 toml::from_str(&content)
-                    .map_err(|e| ProxyError::Config(e.to_string()))
+                    .map_err(|e| CdnError::Config(e.to_string()))
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 log::warn!("Config file not found, using defaults");
                 Ok(Self::default())
             }
-            Err(e) => Err(ProxyError::Io(e)),
+            Err(e) => Err(CdnError::Io(e)),
         }
     }
 
     /// Save config to TOML file
     pub fn save<P: AsRef<Path>>(&self, path: P) -> Result<()> {
         let content = toml::to_string_pretty(self)
-            .map_err(|e| ProxyError::Config(e.to_string()))?;
+            .map_err(|e| CdnError::Config(e.to_string()))?;
         std::fs::write(path, content)?;
         Ok(())
     }
 
-    /// Get the full proxy address
-    pub fn proxy_addr(&self) -> String {
-        format!("{}:{}", self.proxy.proxy_bind, self.proxy.proxy_port)
+    /// Get VLESS link (share format)
+    pub fn vless_link(&self, tunnel_url: Option<&str>) -> String {
+        let host = tunnel_url
+            .unwrap_or(&format!("{}:{}", self.server.bind, self.server.port));
+        
+        format!(
+            "vless://{}@{}?encryption={}&type=ws&path={}",
+            self.vless.uuid,
+            host,
+            self.vless.encryption,
+            urlencoding::encode(&self.server.ws_path)
+        )
     }
 
-    /// Get the full WebSocket path
-    pub fn ws_full_path(&self) -> String {
-        self.proxy.ws_path.clone()
+    /// Get VMSS subscription format
+    pub fn vmss_subscription(&self, tunnel_url: Option<&str>) -> String {
+        let vless_link = self.vless_link(tunnel_url);
+        base64::encode(format!("{}\n", vless_link))
+    }
+}
+
+// For URL encoding
+mod urlencoding {
+    pub fn encode(s: &str) -> String {
+        s.chars()
+            .map(|c| match c {
+                'A'..='Z' | 'a'..='z' | '0'..='9' | '-' | '_' | '.' | '~' => c.to_string(),
+                _ => format!("%{:02X}", c as u8),
+            })
+            .collect()
     }
 }
