@@ -1,5 +1,12 @@
+/target/
+Cargo.lock
+*.swp
+*.swo
+*~
 .DS_Store
-.DS_Store?
-
+config.toml
 .env
-*env*
+.env.local
+*.log
+.vscode/
+.idea/
